@@ -50,4 +50,9 @@ po/*~
 rsconnect/
 
 # Ignore quarto files
-/.quarto/
+/.Quarto/
+
+# html files
+*.html
+
+README_cache/
