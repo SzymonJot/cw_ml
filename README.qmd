@@ -11,7 +11,7 @@ Repozytorium ćwiczeń z projektów ML.
 
 
 * .gitignore ('*.rozszerzenie', 'folder/', '/.quarto/')
-* nie generuj folderu plików pomocniczych przy renderowanie quarto 
+* nie generuj folderu plików pomocniczych przy renderowanie quarto, nie włączaj funkcji cache
 ('self-contained: true' i 'embed-resources:true')
 * Rstudio -> tools -> git -> sign (puste)
 * qmd -> md (gfm)
