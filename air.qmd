@@ -1,0 +1,27 @@
+---
+title: "AirModel"
+format: html
+---
+
+
+
+```{r}
+colnames(airquality) <- tolower(colnames(airquality))
+
+air <-
+  airquality |>
+  as_tibble() |>
+  na.omit() |> 
+  select(-day) |> 
+  mutate(month = factor(month)) 
+```
+
+```{r}
+air$month.replace (1:4 - zima, 4:7 wiosna etc.)
+```
+
+
+```{r}
+temp ~ ozone + solar.r + wind + month
+```
+
