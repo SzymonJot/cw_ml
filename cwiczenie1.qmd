@@ -1,0 +1,162 @@
+---
+title: "projekt_ML_1"
+author: "Szymon Jarmołowski"
+format: 
+  html:
+    self-contained: true
+    embedded-resources: true
+    toc: true
+    toc-depth: 4
+    toc-location: right
+    toc-title: "Spis treści"
+    number-sections: true
+    number-depth: 4
+    code-fold: show
+    code-summary: "Show the code"
+    code-tools: true
+    code-block-bg: true
+    code-block-border-left: "black"
+    code-line-numbers: false
+    code-copy: true
+    html-math-method: katex
+    smooth-scroll: true
+    anchor-sections: true
+    link-external-icon: true
+    link-external-newwindow: true
+---
+
+
+# Porównanie wpływu miesięcu dla prognozy O3 na podstawie danych airquality
+
+## Ładowanie bibliotek 
+
+
+```{r}
+#| warning: false
+library(tidyverse)   
+library(skimr) 
+library(GGally)       
+library(broom)         
+```
+
+
+
+## Eksploracja  danych
+
+```{r}
+# Sprawdzenie struktury danych
+airquality |> skim()
+
+# Usunięcie braków danych
+airquality <- airquality |> na.omit()
+
+# Dane
+head(airquality)
+```
+
+## Przygotowanie danych
+
+```{r}
+# Przygotowanie zestawu danych 
+colnames(airquality) <- tolower(colnames(airquality)) 
+air <- airquality |>
+  as_tibble() |>
+  na.omit() |>                   
+  select(-day) |>                
+  mutate(month = factor(month))   
+
+str(air)
+summary(air)
+```
+
+## Analiza eksploracyjna z GGally - macierz korelacji
+
+```{r}
+correlation_plot <- ggpairs(
+  air, 
+  title = "Macierz korelacji i rozkładów - dane jakości powietrza",
+  mapping = aes(color = month, alpha = 0.6)
+)
+
+print(correlation_plot)
+```
+
+W przypadku ozonu różnice w rozkładach dla poszczególnych miesięcu nie są tak zróżnicowana jak dla temperatury.
+
+```{r}
+# Analiza rozkładów zmiennej ozone według miesięcy
+ozone_by_month <- ggplot(air, aes(x = month, y = ozone, fill = month)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(
+    title = "Rozkład stężenia ozonu według miesięcy",
+    x = "Miesiąc",
+    y = "Stężenie ozonu"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+print(ozone_by_month)
+
+```
+Dka mieięcy 7 oraz 8 widać widocznie wyższą srednią.
+
+## Budowa modelu podstawowego (bez miesiąca)
+
+```{r}
+model_basic <- lm(ozone ~ solar.r + wind + temp, data = air)
+
+# Podsumowanie modelu podstawowego
+summary(model_basic)
+
+# Współczynniki modelu 
+tidy(model_basic) |> print()
+
+# Statystyki  modelu
+glance(model_basic) |> 
+  select(r.squared, adj.r.squared, sigma, statistic, p.value) |>
+  print()
+```
+
+## Budowa modelu z miesiącem
+
+```{r}
+model_with_month <- lm(ozone ~ solar.r + wind + temp + month, data = air)
+
+# Podsumowanie modelu z miesiącem
+summary(model_with_month)
+
+tidy(model_with_month) |> print()
+
+# Statystyki modelu
+glance(model_with_month) |> 
+  select(r.squared, adj.r.squared, sigma, statistic, p.value) |>
+  print()
+```
+Według tego wariantu tylko miesiąc 9 okazał się być statystycznie istotny.
+## Porównanie modeli - test wpływu miesiąca
+
+```{r}
+
+# Test ANOVA dla porównania modeli
+
+# H0: miesiąc nie ma wpływu na prognozę
+# H1: miesiąc ma istotny wpływ na prognozę
+anova_test <- anova(model_basic, model_with_month)
+
+
+p_value <- anova_test$`Pr(>F)`[2]
+
+print(p_value)
+# Porównanie obu modeli
+comparison <- tibble(
+  Model = c("Podstawowy", "Z miesiącem"),
+  R_squared = c(summary(model_basic)$r.squared, summary(model_with_month)$r.squared),
+  Adj_R_squared = c(summary(model_basic)$adj.r.squared, summary(model_with_month)$adj.r.squared),
+  AIC = c(AIC(model_basic), AIC(model_with_month))
+)
+
+print(comparison)
+```
+
+Według testu ANOVA średnie w obu modelach są te same. Oznacza to, że różnice w wydajności modelu nie wpływają z rzeczywistego wpływu dodania informacji o miesiącu.
