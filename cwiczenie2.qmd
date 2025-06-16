@@ -1,9 +1,8 @@
 ---
-title: "projekt_ML_1"
+title: "projekt_ML_2"
 author: "Szymon Jarmołowski"
 format: 
   html:
-    code-tools:true
     self-contained: true
     embedded-resources: true
     toc: true
@@ -26,9 +25,11 @@ format:
     link-external-newwindow: true
 ---
 
-## Quarto
+# Klasyfikacja poziomu ozonu
 
+## Import bibliotek
 ```{r}
+#| warning: false
 library(tidymodels) 
 library(skimr) 
 library(GGally) 
@@ -38,29 +39,31 @@ library(corrplot)
 library(lubridate)
 library(car)
 library(dplyr)
+library(workflows)
 library(e1071)
+library(yardstick)
 tidymodels_prefer()
 
 ```
+
+## Eksploracja danych
+
 ```{r}
 air <- mydata |> selectByDate(year = 2002) 
 air |> skim()
 ```
+Wstępna analiza danych pokazuje, że niemal wszystkie zmienne posiadają braki, przy czym najwięcej brakujących obserwacji dotyczy pyłów PM2.5 (kompletność na poziomie 93%). Kluczową cechą charakterystyczną dla większości zanieczyszczeń, takich jak ozon (o3), pyły (pm10), tlenki azotu (nox) i dwutlenek siarki (so2), jest ich silnie prawoskośny rozkład. Oznacza to, że ich stężenia są zazwyczaj niskie, ale występują rzadkie epizody o ekstremalnie wysokich wartościach.
 
+
+Usunięcie obserwacji z brakami danych
 ```{r}
 air <- air |> na.omit()
 ```
 
 
-```{r}
-set.seed(222)
-air[sample(1:nrow(air), size = 300, replace = F),] |> 
-  select(nox, no2) |> 
-  ggpairs()
-```
+
 
 ```{r}
-
 # wykres regresji liniowej, do sprawdzenia danych 
 set.seed(222)
 air[sample(1:nrow(air), size = 300, replace = F),] |> 
@@ -95,9 +98,11 @@ air <-
     labels = c("Niskie", "Wysokie")
   ))
 ```
+
 ```{r}
 air |> count(ozone)
 ```
+
 ```{r}
 head(air)
 ```
@@ -112,16 +117,15 @@ corrplot(cor_matrix, method = "color", order = "hclust",
 
 
 ```
-Zmienna wd (wind direction) nie wykazuje korelacji. Nie zostanie włączona do modelu.
-NO2 jest zbyt mocno skorelowana z nox, co spowoduje problem współliniowości.
-Tlenek azotu (NOx) to zbiorcza nazwa związków z których najważenijsze to tlenek azout (NO) i dwutlenek azotu (NO2). NO2 zostanie usunięty, ponieważ NOx zawiera w sobie infromacje na temat NO2 oraz bardziej koreluje z stężeniem ozonu.
+
+Zmienna wd (wind direction) nie wykazuje korelacji. Nie zostanie włączona do modelu. NO2 jest zbyt mocno skorelowana z nox, co spowoduje problem współliniowości. Tlenek azotu (NOx) to zbiorcza nazwa związków z których najważniejsze to tlenek azotu (NO) i dwutlenek azotu (NO2). NO2 zostanie usunięty, ponieważ NOx zawiera w sobie infromacje na temat NO2 oraz bardziej koreluje z stężeniem ozonu.
+
 ```{r}
 set.seed(222)
 data_split <- initial_split(data = air, prop = 3/4, strata = ozone)
 train_data <- training(data_split)
 test_data <-  testing(data_split)
 ```
-
 
 ```{r}
 numeric_cols <- air |> select(where(is.numeric))
@@ -133,7 +137,9 @@ skosnosc <- sapply(numeric_cols, skewness, na.rm = TRUE)
 print(skosnosc)
 
 ```
+
 Ze względu na wysoką skośność zmiennych pm10, so2 oraz pm25 zostanie zastosowane przekształcenie YeoJohnson, ponieważ istnieją obserwacje z wartością 0.
+
 ```{r}
 summary(air[, c("pm10", "so2", "pm25")])
 
@@ -149,6 +155,7 @@ air$so2 <- yjPower(air$so2, pt$lambda[2])
 air$pm25 <- yjPower(air$pm25, pt$lambda[3])
 
 ```
+
 ```{r}
 numeric_cols <- air |> select(where(is.numeric))
 
@@ -159,22 +166,9 @@ skosnosc <- sapply(numeric_cols, skewness, na.rm = TRUE)
 print(skosnosc)
 ```
 
+## Budowa przepisu oraz modelu
 ```{r}
-air <- air %>%
-  mutate(
-    month = as.factor(month(date)),
-    hour = as.factor(hour(date)),
-    season = case_when(
-      month %in% c(12, 1, 2)  ~ "Zima",
-      month %in% c(3, 4, 5)   ~ "Wiosna",
-      month %in% c(6, 7, 8)   ~ "Lato",
-      month %in% c(9, 10, 11) ~ "Jesien",
-    ) %>% as.factor()
-  )
-```
-
-```{r}
-rec <- recipe(~ ., data = train_data) |> 
+rec <- recipe(ozone ~ ., data = train_data) |> 
   step_YeoJohnson(all_of(c("pm10", "so2", "pm25"))) |> 
   step_date(date, features = "month") |> 
   step_time(date, features = "hour") |> 
@@ -193,7 +187,10 @@ rec <- recipe(~ ., data = train_data) |>
       date_hour >= 6 & date_hour < 22 ~ "Dzień",
       TRUE                             ~ "Noc"
     )
-  )
+  ) |> 
+  step_rm(date_month, date_hour, no2, wd, o3, date) |> 
+  step_mutate(pora_dnia = as.factor(pora_dnia)) |> 
+  step_dummy(all_nominal(), -all_outcomes())
 
 ```
 
@@ -204,6 +201,106 @@ head(air_transformed)
 
 ```
 
-Normalizacja danych
-Balans zmiennych jakościowych
-Transformacja daty
+```{r}
+log_reg_spec <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification")
+
+```
+
+```{r}
+log_wf <- workflow() |> 
+  add_model(log_reg_spec) |> 
+  add_recipe(rec)
+```
+
+```{r}
+log_fit <- fit(log_wf, data = train_data)
+model_obj <- extract_fit_engine(log_fit)
+summary(model_obj)
+
+```
+
+Zmienne so2 oraz co nie są istotne statystycznie. W dalszej części analizy zostaną one usunięte z modelu.
+
+```{r}
+test_data <- test_data |> mutate(ozone = as.factor(ozone))
+
+predictions <- predict(log_fit, new_data = test_data, type = "prob") |> 
+  bind_cols(predict(log_fit, new_data = test_data)) |> 
+  bind_cols(test_data)
+
+metrics(predictions, truth = ozone, estimate = .pred_class)
+
+```
+
+```{r}
+conf_mat_tbl <- conf_mat(predictions, truth = ozone, estimate = .pred_class)
+print(conf_mat_tbl)
+```
+
+## Budowa poprawionego modelu
+
+```{r}
+rec_corr <- recipe(ozone ~ ., data = train_data) |> 
+  step_YeoJohnson(all_of(c("pm10", "so2", "pm25"))) |> 
+  step_date(date, features = "month") |> 
+  step_time(date, features = "hour") |> 
+  step_mutate(date_month = as.numeric(date_month)) |> 
+  step_mutate(
+    season = case_when(
+      date_month %in% c(12, 1, 2)  ~ "Zima",
+      date_month %in% c(3, 4, 5)   ~ "Wiosna",
+      date_month %in% c(6, 7, 8)   ~ "Lato",
+      date_month %in% c(9, 10, 11) ~ "Jesien"
+    )
+  ) |> 
+  step_mutate(season = as.factor(season)) |> 
+  step_mutate(
+    pora_dnia = case_when(
+      date_hour >= 6 & date_hour < 22 ~ "Dzień",
+      TRUE                             ~ "Noc"
+    )
+  ) |> 
+  step_rm(date_month, date_hour, no2, wd, o3, date, co,so2) |> 
+  step_mutate(pora_dnia = as.factor(pora_dnia)) |> 
+  step_dummy(all_nominal(), -all_outcomes())
+```
+
+```{r}
+log_wf <- workflow() |> 
+  add_model(log_reg_spec) |> 
+  add_recipe(rec_corr)
+```
+
+```{r}
+log_fit <- fit(log_wf, data = train_data)
+model_obj <- extract_fit_engine(log_fit)
+summary(model_obj)
+
+```
+
+```{r}
+test_data <- test_data |> mutate(ozone = as.factor(ozone))
+
+predictions <- predict(log_fit, new_data = test_data, type = "prob") |> 
+  bind_cols(predict(log_fit, new_data = test_data)) |> 
+  bind_cols(test_data)
+
+
+metrics(predictions, truth = ozone, estimate = .pred_class)
+```
+
+```{r}
+conf_mat_tbl <- conf_mat(predictions, truth = ozone, estimate = .pred_class)
+print(conf_mat_tbl)
+
+```
+
+## Wnioski
+
+* Stworzony model jest skuteczny i dokładny (90%) w prognozowaniu wysokiego/niskiego stężenia ozonu.
+
+* Kluczowe czynniki zwiększające prawdopodobieństwo wysokiego ozonu to: pora roku (szczególnie wiosna i lato), wysokie stężenie pyłu PM10 oraz wyższa wartość prędkośi wiatru.
+
+* Czynniki silnie zmniejszające to prawdopodobieństwo to: pora roku (zima), pora dnia (noc), a także (w mniejszym stopniu) wyższe stężenia NOx i PM25.
