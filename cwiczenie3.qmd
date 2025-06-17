@@ -306,4 +306,4 @@ print(rf_bootstrap_metrics)
 
 ## Wnioski
 
-
+Metryki wydajności obu metod są bardzo podobne, co świadczy o tym, że obie metod zwracają podobne wyniki. Walidacja krzyżowa oraz bootstrapping pozwolił uzyskać stabilne oceny modelu
