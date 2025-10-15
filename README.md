@@ -16,8 +16,7 @@ Szymon Jarmołowski
 ## commit pull push
 
 ## branch
-1) tworzenie branch kodujemy z poziomu rstudio
-2) wysyłanie zawiedzeń 
-3) gdzie trafiły zatwierdzenia do nowej gałęzi na na github, która nie jest połączona
-4) merge kodujemy do main (etykiety, kamienie milowe)
-5) uwaga po merge trzeba zrobić w rstudio pull do main, bo main nie będzie aktualny. To co robisz na github nie zapisje się automatycznie na twoim komputerze tylkow chmurze
+1) Tworzenie branch z poziomu rstudio
+2) Wysyłanie zatwierdzeń 
+3) Gdzie trafiły zatwierdzenia do nowej gałęzi na na github, która nie jest połączona
+4) Merge do main (etykiety, kamienie milowe)
